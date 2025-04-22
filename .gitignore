@@ -1,0 +1,10 @@
+*.log
+*.out
+__pycache__
+wandb
+results
+result
+models
+output
+.idea
+
