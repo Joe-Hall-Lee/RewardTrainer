@@ -3,8 +3,8 @@
 ################################################################################
 
 variables:
-  run_name: 8b-CLoud
-  dataset_path: data/hhrlhf_critique_llama3.json
+  run_name: Llama-3-8B-Instruct-CLoud-HHRLHF
+  dataset_path: data/hhrlhf-skywork_critique_llama.json
   micro_batch_size: 2
   global_seed: 17
   max_seq_len: 1024
@@ -17,7 +17,7 @@ run_name: ${variables.run_name}
 model:
   feedback_method: teacher
   base_model_name_or_path: models/Llama-3-8B-Instruct
-  finetuned_model_name_or_path: output/Llama-3-8B-Instruct-Critique-SFT-HHRLHF
+  finetuned_model_name_or_path: output/Llama-3-8B-Instruct-Critic-HHRLHF
 
 
 ################################################################################
@@ -125,5 +125,6 @@ eval_first: false
 ################################################################################
 # Model saving / loading
 ################################################################################
-save_folder: ckpts/${variables.run_name}
-save_interval: 0.5dur # Save twice per run
+save_folder: output/${variables.run_name}
+save_interval: 0
+save_num_checkpoints_to_keep: 0

@@ -62,7 +62,7 @@ class HFCheckpointer(Callback):
             'float16': torch.float16,
             'bfloat16': torch.bfloat16,
         }['bfloat16']
-        self.save_name = os.path.join(save_base, "hf")
+        self.save_name = save_base
 
     def run_event(self, event: Event, state: State, logger: Logger) -> None:
         if event == Event.FIT_END:

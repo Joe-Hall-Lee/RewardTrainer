@@ -19,52 +19,41 @@ def build_chat_messages(prompt, response=None):
         raise ValueError(f"Invalid prompt: {prompt}")
     messages = [{"role": "user", "content": prompt}]
     if response is not None:
-        if not isinstance(response, str) or not response.strip():
-            raise ValueError(f"Invalid response: {response}")
         messages.append({"role": "assistant", "content": response})
     return messages
 
 # Utility functions for tokenization
 def build_prompt_tokens(prompt, tokenizer):
-    """Tokenize the prompt as a user message."""
-    messages = build_chat_messages(prompt)
-    # print(f"Prompt messages: {messages}")  # 调试
-    tokenized_prompt = tokenizer.apply_chat_template(messages, tokenize=True)
+    tokenized_prompt = tokenizer.apply_chat_template([{
+        "role": "user",
+        "content": prompt
+    }], tokenize=True)
     return tokenized_prompt, [-100] * len(tokenized_prompt)
 
-def build_response_tokens(response, prompt, tokenizer, keep_targets=False):
-    """Tokenize the response with preceding prompt as context."""
-    messages = build_chat_messages(prompt, response)
-    # print(f"Response messages: {messages}")  # 调试
+def build_response_tokens(response, tokenizer, keep_targets):
+    # 添加一个假的 user 角色消息
+    messages = [
+        {"role": "user", "content": "dummy message"},
+        {"role": "assistant", "content": response}
+    ]
     tokenized_response = tokenizer.apply_chat_template(messages, tokenize=True)
-    # Remove BOS token if present
+    # 去掉假的 user 角色消息部分
+    tokenized_response = tokenized_response[len(tokenizer.apply_chat_template([{"role": "user", "content": "dummy message"}], tokenize=True)):]
     if tokenized_response[0] == tokenizer.bos_token_id:
         tokenized_response = tokenized_response[1:]
-    # Labels: only the response tokens are targets if keep_targets=True
     if keep_targets:
-        # Assume response starts after prompt tokens; this is approximate
-        prompt_tokens = len(tokenizer.apply_chat_template([messages[0]], tokenize=True))
-        if tokenized_response[0] == tokenizer.bos_token_id:
-            prompt_tokens -= 1  # Adjust for BOS
-        response_labels = [-100] * prompt_tokens + tokenized_response[prompt_tokens:-1] + [-100]
-        return tokenized_response, response_labels
+        return tokenized_response, tokenized_response[1:] + [-100]
     return tokenized_response, [-100] * len(tokenized_response)
 
-def build_feedback_tokens(feedback, feedback_prompt, tokenizer, keep_targets=False):
-    """Tokenize the feedback with feedback_prompt as user message."""
-    messages = build_chat_messages(feedback_prompt, feedback)
-    # print(f"Feedback messages: {messages}")  # 调试
-    tokenized_feedback = tokenizer.apply_chat_template(messages, tokenize=True)
-    # Remove BOS token if present
+def build_feedback_tokens(feedback, feedback_prompt, tokenizer, keep_targets):
+    tokenized_feedback = tokenizer.apply_chat_template([{
+        "role": "user",
+        "content": feedback_prompt + feedback
+    }], tokenize=True)
     if tokenized_feedback[0] == tokenizer.bos_token_id:
         tokenized_feedback = tokenized_feedback[1:]
-    # Labels: only the feedback tokens are targets if keep_targets=True
     if keep_targets:
-        prompt_tokens = len(tokenizer.apply_chat_template([messages[0]], tokenize=True))
-        if tokenized_feedback[0] == tokenizer.bos_token_id:
-            prompt_tokens -= 1  # Adjust for BOS
-        feedback_labels = [-100] * prompt_tokens + tokenized_feedback[prompt_tokens:-1] + [-100]
-        return tokenized_feedback, feedback_labels
+        return tokenized_feedback, tokenized_feedback[1:] + [-100]
     return tokenized_feedback, [-100] * len(tokenized_feedback)
 
 def transform_to_seq_len(data, pad_val, max_seq_len):
@@ -82,37 +71,46 @@ def feedback_collate_fn(
     cot_prompt,
     data,
 ):
-    """Collator for feedback data."""
+    """Collator for feedback data.
+
+    Args:
+        tokenizer (Tokenzer): The model's tokenizer.
+        max_seq_len (int): The maximum sequence length of the model.
+        data (dict): The preference data to collate.
+    """
     batch_chosen_input_ids = []
     batch_chosen_labels = []
     batch_chosen_attention_masks = []
+
     batch_rejected_input_ids = []
     batch_rejected_labels = []
     batch_rejected_attention_masks = []
 
     for sample_idx, sample in enumerate(data):
+
         # Trackers that will be returned
         chosen_input_ids = []
         chosen_labels = []
+
         rejected_input_ids = []
         rejected_labels = []
 
         # Build prompt tokens and labels
         prompt, prompt_labels = build_prompt_tokens(sample["prompt"], tokenizer)
+
         chosen_input_ids.extend(prompt)
         chosen_labels.extend(prompt_labels)
+
         rejected_input_ids.extend(prompt)
         rejected_labels.extend(prompt_labels)
 
         # Build chosen and rejected response tokens
-        chosen_response, chosen_response_labels = build_response_tokens(
-            sample["chosen"], sample["prompt"], tokenizer, keep_targets=False
-        )
-        rejected_response, rejected_response_labels = build_response_tokens(
-            sample["rejected"], sample["prompt"], tokenizer, keep_targets=False
-        )
+        chosen_response, chosen_response_labels = build_response_tokens(sample["chosen"], tokenizer, keep_targets=False)
+        rejected_response, rejected_response_labels = build_response_tokens(sample["rejected"], tokenizer, keep_targets=False)
+
         chosen_input_ids.extend(chosen_response)
         chosen_labels.extend(chosen_response_labels)
+
         rejected_input_ids.extend(rejected_response)
         rejected_labels.extend(rejected_response_labels)
 
@@ -127,14 +125,12 @@ def feedback_collate_fn(
             raise ValueError(f"Invalid feedback type: {type(sample['chosen_feedback'])}")
 
         if feedback_method in ["csft", "teacher"]:
-            chosen_feedback, chosen_feedback_labels = build_feedback_tokens(
-                chosen_feedback, cot_prompt, tokenizer, keep_targets=True
-            )
-            rejected_feedback, rejected_feedback_labels = build_feedback_tokens(
-                rejected_feedback, cot_prompt, tokenizer, keep_targets=True
-            )
+            chosen_feedback, chosen_feedback_labels = build_feedback_tokens(chosen_feedback, cot_prompt, tokenizer, keep_targets=True)
+            rejected_feedback, rejected_feedback_labels = build_feedback_tokens(rejected_feedback, cot_prompt, tokenizer, keep_targets=True)
+
             chosen_input_ids.extend(chosen_feedback)
             chosen_labels.extend(chosen_feedback_labels)
+
             rejected_input_ids.extend(rejected_feedback)
             rejected_labels.extend(rejected_feedback_labels)
         
@@ -180,7 +176,6 @@ def feedback_collate_fn(
         "rejected_attention_mask": batch_rejected_attention_masks,
         "rejected_lm_labels": batch_rejected_labels,
     }
-
 def build_feedback_dataloader(
     cfg,
     device_batch_size,
@@ -188,9 +183,20 @@ def build_feedback_dataloader(
     feedback_method,
     cot_prompt,
 ):
-    """Build a dataloader for preference data, supporting local paths."""
+    """Build a streaming dataloader for preference data.
+
+    Args:
+        cfg (DictConfig): config to initialize the streaming components.
+        device_batch_size (int): batch size per device.
+        dataset_class (cls): the streaming dataset class to initialize.
+        tokenizer (Tokenizer): the model's tokenizer.
+        collate_fn: the function used to collate data.
+        pad_token (str): the pad token to use.
+        left_pad (bool): indiating if we should left pad the sequences.
+        add_pad_token (bool): indicating if we should add a pad token to the tokenizer.
+    """
     max_seq_len = cfg.dataset.pop("max_seq_len", None)
-    dataset_path = cfg.dataset.pop("remote")  # Rename 'remote' to 'path' for clarity
+    dataset_path = cfg.dataset.pop("remote")
     split = cfg.dataset.pop("split", "train")
 
     try:
@@ -202,7 +208,6 @@ def build_feedback_dataloader(
             print(f"Loaded dataset from Hugging Face Hub or other remote: {dataset_path}, split: {split}")
         except Exception as e:
             raise ValueError(f"Could not load dataset from path: {dataset_path}. Error: {e}")
-
     dist_sampler = dist.get_sampler(dataset, shuffle=cfg.dataset.shuffle, drop_last=cfg.drop_last)
     dataloader = DataLoader(
         dataset,
@@ -218,35 +223,6 @@ def build_feedback_dataloader(
     )
     return dataloader
 
-def build_evaluators(
-    eval_loader_config,
-    tokenizer,
-    device_eval_batch_size,
-    feedback_method,
-    cot_prompt,
-    metric_names
-):
-    """Build evaluators for validation datasets."""
-    evaluators = []
-    assert isinstance(eval_loader_config, omegaconf.ListConfig)
-
-    for i, eval_config in enumerate(eval_loader_config):
-        label = eval_config.pop('label', f'eval-{i}')
-        eval_dataloader = build_feedback_dataloader(
-            eval_config,
-            device_eval_batch_size,
-            tokenizer,
-            feedback_method,
-            cot_prompt
-        )
-        eval_loader = Evaluator(
-            label=f'eval/{label}',
-            dataloader=eval_dataloader,
-            metric_names=metric_names,
-            device_eval_microbatch_size=device_eval_batch_size,
-        )
-        evaluators.append(eval_loader)
-    return evaluators
 
 if __name__ == "__main__":
     from transformers import AutoTokenizer
@@ -262,7 +238,7 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained("models/Mistral-7B-Instruct-v0.3")
     tokenizer.pad_token_id = tokenizer.eos_token_id
-    ret = feedback_collate_fn(tokenizer, 60, "teacher", COT_PROMPT, sample_data)
+    ret = feedback_collate_fn(tokenizer, 60, "csft", COT_PROMPT, sample_data)
 
     print("CHOSEN TEXT")
     print(tokenizer.decode(ret["chosen_input_ids"][0]))

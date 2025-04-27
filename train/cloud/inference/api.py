@@ -32,7 +32,7 @@ class CLoudAPI():
             assert "localhost" in server_url, "Server URL must be localhost for non-hosted models"
             port = server_url.split(":")[-1]
             self.server_process = subprocess.Popen([
-                "python", "cloud/inference/serve_cloud.py",
+                "python", "train/cloud/inference/serve_cloud.py",
                 "--model", model,
                 "--tensor-parallel-size", str(tensor_parallel_size),
                 "--port", port,

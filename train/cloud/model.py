@@ -87,13 +87,19 @@ class CLoudRewardModel(PreTrainedModel):
             )
 
             if self.feedback_method == "teacher":
+                # 根据模型是否为 llama3 设置 eot_text
+                if "llama-3" in tokenizer.name_or_path.lower():
+                    eot_text = "<|eot_id|>"
+                else:
+                    eot_text = tokenizer.decode([tokenizer.eos_token_id])
+
                 critique_prefix = tokenizer.apply_chat_template(
                     [{"role": "user", "content": critique_prompt}],
                     tokenize=False
                 )
                 critique_prefix = critique_prefix.replace(tokenizer.decode([tokenizer.bos_token_id]), "")
                 critique_prefix = critique_prefix.replace(tokenizer.decode([tokenizer.eos_token_id]), "")
-                critique_prefix = critique_prefix.replace("<|eot_id|>", "") # Currently hard coded for llama3 chat template
+                critique_prefix = critique_prefix.replace(eot_text, "")  # 动态替换 eot_text
 
                 input_prefix += critique_prefix
             
@@ -126,8 +132,15 @@ class CLoudRewardModel(PreTrainedModel):
         formatted_prompts, reward_model_inputs = self.prepare_inputs_for_reward(user_prompts, assistant_responses, tokenizer, critique_prompt)
         batch_size, input_seq_len = reward_model_inputs.input_ids.shape
 
-        eot_token_text = "<|eot_id|>"
-        eot_token_id = tokenizer.encode(eot_token_text, add_special_tokens=False)[0] # Hard coded for llama3 chat template
+        # 根据模型是否为 llama3 设置 eot_token_text
+        if "llama-3" in tokenizer.name_or_path.lower():
+            eot_token_text = "<|eot_id|>"
+        elif "mistral" in tokenizer.name_or_path.lower():
+            eot_token_text = "[/INST]"
+        else:
+            raise ValueError("Unsupported model type for eot_token_text")
+
+        eot_token_id = tokenizer.encode(eot_token_text, add_special_tokens=False)[0]  # 动态获取 eot_token_id
 
         if self.feedback_method == "vanilla":
             outputs = self.reward_base_model(
@@ -181,8 +194,7 @@ class CLoudRewardModel(PreTrainedModel):
 if __name__ == "__main__":
     from transformers import AutoTokenizer
 
-    model_name = "ankner/Llama3-8B-CLoud-RM"
-    # model_name = "ankner/Llama3-8B-Classic-RM"
+    model_name = "output/Mistral-7B-Instruct-v0.3-CLoud-HHRLHF"
     model = CLoudRewardModel.from_pretrained(model_name, device_map="cuda", torch_dtype=torch.float16)
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left")
 

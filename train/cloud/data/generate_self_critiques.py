@@ -6,6 +6,8 @@ from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 import sys
+import json
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 from train.cloud.train.train import COT_PROMPT
@@ -14,7 +16,12 @@ from train.cloud.train.data import build_chat_messages
 def build_feedback_prompts(tokenizer, example):
     bos_text = tokenizer.decode([tokenizer.bos_token_id])
     eos_text = tokenizer.decode([tokenizer.eos_token_id])
-    eot_text = "<|eot_id|>"  # Hard coded for llama3 end of turn id for now but oh well
+    
+    # 根据模型是否为 llama3 设置 eot_text
+    if "llama-3" in tokenizer.name_or_path.lower():
+        eot_text = "<|eot_id|>"
+    else:
+        eot_text = eos_text
 
     chosen_prefix = tokenizer.apply_chat_template(build_chat_messages(example["prompt"], example["chosen"]), tokenize=False)
     rejected_prefix = tokenizer.apply_chat_template(build_chat_messages(example["prompt"], example["rejected"]), tokenize=False)
@@ -31,10 +38,15 @@ def main(args):
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
     # Initialize vLLM model
-    llm = LLM(model=args.model, max_model_len=args.max_tokens)
+    llm = LLM(model=args.model, max_model_len=args.max_tokens, gpu_memory_utilization=0.6)
+
+    # 根据模型是否为 llama3 设置 eot_text
+    if "llama-3" in tokenizer.name_or_path.lower():
+        eot_text = "<|eot_id|>"
+    else:
+        eot_text = "[/INST]"
 
     # Configure sampling parameters
-    eot_text = "<|eot_id|>"
     sampling_params = SamplingParams(
         temperature=args.temp,
         max_tokens=args.max_tokens,
@@ -54,49 +66,46 @@ def main(args):
 
     # Load dataset from local file
     ds = load_dataset(dataset_format, data_files=args.base_dataset, split="train")
-    
-    ds = ds.map(lambda x: build_feedback_prompts(tokenizer, x), num_proc=10)
 
-    def fetch_response(examples):
-        chosen_feedback_prompts = [example["chosen_feedback_prompt"] for example in examples]
-        rejected_feedback_prompts = [example["rejected_feedback_prompt"] for example in examples]
+    ds = ds.map(lambda x: build_feedback_prompts(tokenizer, x), num_proc=args.num_proc)
 
-        # Generate chosen feedback
-        chosen_outputs = llm.generate(chosen_feedback_prompts, sampling_params)
-        chosen_feedback = [output.outputs[0].text for output in chosen_outputs]
+    chosen_feedback_prompts = [example["chosen_feedback_prompt"] for example in ds]
+    rejected_feedback_prompts = [example["rejected_feedback_prompt"] for example in ds]
 
-        # Generate rejected feedback
-        rejected_outputs = llm.generate(rejected_feedback_prompts, sampling_params)
-        rejected_feedback = [output.outputs[0].text for output in rejected_outputs]
+    # Generate chosen feedback
+    chosen_outputs = llm.generate(chosen_feedback_prompts, sampling_params)
+    chosen_feedback = [output.outputs[0].text for output in chosen_outputs]
 
-        results = [
-            {**example, "chosen_feedback": [chosen], "rejected_feedback": [rejected]}
-            for example, chosen, rejected in zip(examples, chosen_feedback, rejected_feedback)
-        ]
-        return results
+    # Generate rejected feedback
+    rejected_outputs = llm.generate(rejected_feedback_prompts, sampling_params)
+    rejected_feedback = [output.outputs[0].text for output in rejected_outputs]
 
     all_feedback = []
-    bs = 128
-    for i in tqdm(range(0, len(ds), bs), desc="Fetching responses", leave=True):
-        batch_examples = [ds[j] for j in range(i, min(i + bs, len(ds)))]
-        all_feedback.extend(fetch_response(batch_examples))
+    for i in tqdm(range(len(ds)), desc="Processing examples"):
+        all_feedback.append({
+            **ds[i],
+            "chosen_feedback": [chosen_feedback[i]],
+            "rejected_feedback": [rejected_feedback[i]]
+        })
 
     hf_feedback_ds = Dataset.from_list(all_feedback)
     cols_to_select = ["prompt", "chosen", "rejected", "chosen_feedback", "rejected_feedback", "id"]
     hf_feedback_ds = hf_feedback_ds.select_columns(cols_to_select)
 
-    # Save to local JSON file as an array
+    # Save to local JSON file as a single array
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    hf_feedback_ds.to_json(args.output, orient="records", lines=False, force_ascii=False, indent=2)
+    with open(args.output, 'w', encoding='utf-8') as f:
+        json.dump(hf_feedback_ds.to_list(), f, indent=2, ensure_ascii=False)
     print(f"Dataset saved to {args.output}")
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    
+
     # Model / data params
     parser.add_argument("--model", type=str, required=True, help="Path to the model or model identifier (e.g., meta-llama/Meta-Llama-3-8B)")
     parser.add_argument("--base-dataset", type=str, required=True, help="Path to local dataset file (e.g., .json, .jsonl, .csv, .parquet)")
     parser.add_argument("--output", type=str, default="output.json", help="Path to output JSON file")
+    parser.add_argument("--num-proc", type=int, default=10, help="Number of processes for dataset mapping")
 
     # Sampling params
     parser.add_argument("--max-tokens", type=int, default=2048, help="Maximum number of tokens to generate")

@@ -20,7 +20,7 @@ from llmfoundry.models.hf import prepare_hf_model_for_fsdp
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 from train.cloud.train.utils import train, build_causal_lm
-from train.cloud.train.data import build_feedback_dataloader, build_evaluators
+from train.cloud.train.data import build_feedback_dataloader
 
 from train.cloud.model import (CLoudRewardModelConfig, CLoudRewardModel, COT_PROMPT)
 
@@ -295,18 +295,7 @@ def main(cfg):
         COT_PROMPT
     )
 
-    evaluators = None
-    if cfg.get('eval_loader', None) is not None:
-        evaluators = build_evaluators(
-            cfg.eval_loader,
-            tokenizer,
-            cfg.device_eval_batch_size,
-            cfg.model.feedback_method,
-            COT_PROMPT,
-            list(model.get_metrics(is_train=False).keys())
-        )
-
-    train(cfg, model, train_reward_loader, evaluators)    
+    train(cfg, model, train_reward_loader, None)    
 
 
 if __name__ == '__main__':

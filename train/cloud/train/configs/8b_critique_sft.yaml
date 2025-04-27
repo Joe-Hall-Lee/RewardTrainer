@@ -3,8 +3,8 @@
 ################################################################################
 
 variables:
-  run_name: 8b-Critique-SFT
-  dataset_path: data/helpsteer2-oracle.json
+  run_name: Llama-3-8B-Instruct-Critic-HHRLHF
+  dataset_path: data/hhrlhf-skywork-oracle.json
   micro_batch_size: 2
   global_seed: 17
   max_seq_len: 1024
@@ -16,7 +16,7 @@ run_name: ${variables.run_name}
 ################################################################################
 model:
   feedback_method: csft
-  base_model_name_or_path: models/Mistral-7B-Instruct-v0.3
+  base_model_name_or_path: models/Llama-3-8B-Instruct
 
 
 ################################################################################
@@ -61,19 +61,6 @@ train_loader:
   drop_last: true
   name: text
   num_workers: 8
-
-eval_subset_num_batches: -1
-eval_loader:
-- dataset:
-    max_seq_len: ${variables.max_seq_len}
-    shuffle: false
-    remote: ${variables.dataset_path}
-    split: test
-  drop_last: true
-  label: ultra
-  name: text
-  num_workers: 8
-
 
 ################################################################################
 # Parallelism
@@ -124,5 +111,6 @@ eval_first: false
 ################################################################################
 # Model saving / loading
 ################################################################################
-save_folder: ckpts/${variables.run_name}
-save_interval: 0.5dur # Save twice per run
+save_folder: output/${variables.run_name}
+save_interval: 0ep
+save_num_checkpoints_to_keep: 0

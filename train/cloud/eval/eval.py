@@ -11,6 +11,7 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 from train.cloud.model import CLoudRewardModel
+from train.cloud.inference.api import CLoudAPI
 
 
 REWARD_BENCH_TO_CATEGORY_MAPPING = {
@@ -36,8 +37,10 @@ REWARD_BENCH_TO_CATEGORY_MAPPING = {
         "xstest-should-respond",
         "donotanswer",
     ],
-    "Reasoning": [
+    "Math": [  # 单独列出数学
         "math-prm",
+    ],
+    "Code": [  # 单独列出代码
         "hep-cpp",
         "hep-go",
         "hep-java",
@@ -73,35 +76,54 @@ def load_reward_bench(json_path):
         })
     return eval_data, eval_metadata
 
-
-
 ###########
 # Post-process Scores
 ###########
 
 def post_process_reward_bench(eval_metadata, rewards):
-    per_category_scores = {category: [] for category in REWARD_BENCH_TO_CATEGORY_MAPPING.keys()}
+    # 初始化所有类别（包括 Math 和 Code）
+    per_category_scores = {
+        "Chat": [],
+        "Chat Hard": [],
+        "Safety": [],
+        "Math": [],
+        "Code": []
+    }
+    
+    # 收集各子类别的得分
     for example in eval_metadata:
         id_ = example["id"]
         chosen_reward = rewards[id_ + "-chosen"]
         rejected_reward = rewards[id_ + "-rejected"]
+        
+        # 检查属于哪个类别
         for category, subsets in REWARD_BENCH_TO_CATEGORY_MAPPING.items():
             if example["subset"] in subsets:
                 per_category_scores[category].append(int(chosen_reward > rejected_reward))
                 break
-    per_category_scores = {category: np.mean(scores) * 100 for category, scores in per_category_scores.items()}
-    per_category_scores["Average"] = np.mean([score for score in per_category_scores.values()])
+    
+    # 计算各子类别的准确率
+    per_category_scores = {
+        category: np.mean(scores) * 100 if scores else 0.0
+        for category, scores in per_category_scores.items()
+    }
+    
+    # 计算 Reasoning 类别得分（Math 和 Code 的平均）
+    per_category_scores["Reasoning"] = (per_category_scores["Math"] + per_category_scores["Code"]) / 2
+    
+    # 计算总平均（Chat, Chat Hard, Safety, Reasoning）
+    valid_categories = ["Chat", "Chat Hard", "Safety", "Reasoning"]
+    per_category_scores["Average"] = np.mean([per_category_scores[cat] for cat in valid_categories])
 
-    # Print scores in a pretty way
+    # 打印结果
     print("\nReward Bench Scores:")
     print("=" * 40)
     max_category_length = max(len(category) for category in per_category_scores.keys())
-    for category, score in per_category_scores.items():
-        print(f"{category:<{max_category_length}} : {score:.2f}%")
+    for category in ["Chat", "Chat Hard", "Safety", "Math", "Code", "Reasoning", "Average"]:
+        print(f"{category:<{max_category_length}} : {per_category_scores[category]:.2f}%")
     print("=" * 40)
 
     return per_category_scores
-
 
 ###########
 # Scoring
@@ -142,8 +164,6 @@ def generate_rewards_vllm(client, eval_data, num_workers):
 
     return rewards
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", type=str, required=True)
@@ -166,7 +186,6 @@ if __name__ == "__main__":
         eval_data, eval_metadata = load_reward_bench(args.benchmark_path)
     else:
         raise ValueError("benchmark_path must be provided")
-
 
     if args.inference_method == "hf":
         if CLoudRewardModel is None or AutoTokenizer is None:
