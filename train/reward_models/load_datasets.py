@@ -20,15 +20,15 @@ def build_dataset(data_path, tokenizer, split='train', size=None, model_name='',
         logging.info(f"Reduced dataset to {len(ds)} examples")
 
     def convert_to_chat_format(example):
-        instruction = example.get("instruction", "").strip()
+        prompt = example.get("prompt", "").strip()
         chosen = example.get("chosen", "").strip() or " "
         rejected = example.get("rejected", "").strip() or " "
 
-        if not instruction:
-            raise ValueError(f"Empty instruction in example: {example}")
+        if not prompt:
+            raise ValueError(f"Empty prompt in example: {example}")
 
-        chosen_messages = [{"role": "user", "content": instruction}, {"role": "assistant", "content": chosen}]
-        rejected_messages = [{"role": "user", "content": instruction}, {"role": "assistant", "content": rejected}]
+        chosen_messages = [{"role": "user", "content": prompt}, {"role": "assistant", "content": chosen}]
+        rejected_messages = [{"role": "user", "content": prompt}, {"role": "assistant", "content": rejected}]
         return {"chosen": chosen_messages, "rejected": rejected_messages}
 
     def formatting_func(example):

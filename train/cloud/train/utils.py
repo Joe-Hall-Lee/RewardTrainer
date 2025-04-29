@@ -322,7 +322,9 @@ def train(cfg, model, train_loader, evaluators):
         device_train_microbatch_size=cfg.get(
             'device_train_microbatch_size', 'auto',
         ),
-        fsdp_config=fsdp_config,
+        parallelism_config={
+            'fsdp': fsdp_config,
+        },
         save_folder=cfg.get('save_folder', None),
         save_interval=cfg.get('save_interval', '1000ba'),
         save_num_checkpoints_to_keep=cfg.get(

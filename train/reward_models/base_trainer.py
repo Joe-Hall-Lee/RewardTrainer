@@ -217,8 +217,7 @@ class RewardTrainer(Trainer):
         self,
         model: Union[PreTrainedModel, nn.Module],
         inputs: Dict[str, Union[torch.Tensor, Any]],
-        return_outputs=False,
-        num_items_in_batch=None,
+        return_outputs=False
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]]:
         if not self.use_reward_data_collator:
             warnings.warn(

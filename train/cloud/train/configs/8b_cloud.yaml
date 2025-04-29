@@ -3,8 +3,8 @@
 ################################################################################
 
 variables:
-  run_name: Llama-3-8B-Instruct-CLoud-HHRLHF
-  dataset_path: data/hhrlhf-skywork_critique_llama.json
+  run_name: Qwen2.5-7B-Instruct-CLoud-HHRLHF
+  dataset_path: data/hhrlhf-skywork_critique_qwen.json
   micro_batch_size: 2
   global_seed: 17
   max_seq_len: 1024
@@ -16,8 +16,8 @@ run_name: ${variables.run_name}
 ################################################################################
 model:
   feedback_method: teacher
-  base_model_name_or_path: models/Llama-3-8B-Instruct
-  finetuned_model_name_or_path: output/Llama-3-8B-Instruct-Critic-HHRLHF
+  base_model_name_or_path: models/Qwen2.5-7B-Instruct
+  finetuned_model_name_or_path: output/Qwen2.5-7B-Instruct-Critic-HHRLHF
 
 
 ################################################################################

@@ -46,12 +46,29 @@ def build_response_tokens(response, tokenizer, keep_targets):
     return tokenized_response, [-100] * len(tokenized_response)
 
 def build_feedback_tokens(feedback, feedback_prompt, tokenizer, keep_targets):
+    # 生成 tokenized_feedback
     tokenized_feedback = tokenizer.apply_chat_template([{
         "role": "user",
         "content": feedback_prompt + feedback
     }], tokenize=True)
+    
+    # 解码 tokenized_feedback 为文本
+    decoded_feedback = tokenizer.decode(tokenized_feedback)
+    
+    # 检查并移除 system 消息
+    if "<|im_start|>system" in decoded_feedback:
+        # 找到 system 消息的结束位置
+        system_end = decoded_feedback.find("<|im_end|>") + len("<|im_end|>")
+        # 移除 system 消息部分
+        decoded_feedback = decoded_feedback[system_end:].strip()
+        # 重新编码为 tokens
+        tokenized_feedback = tokenizer.encode(decoded_feedback, add_special_tokens=False)
+    
+    # 移除开头的 BOS token（如果有）
     if tokenized_feedback[0] == tokenizer.bos_token_id:
         tokenized_feedback = tokenized_feedback[1:]
+    
+    # 根据 keep_targets 返回结果
     if keep_targets:
         return tokenized_feedback, tokenized_feedback[1:] + [-100]
     return tokenized_feedback, [-100] * len(tokenized_feedback)
@@ -236,9 +253,9 @@ if __name__ == "__main__":
         "rejected_feedback": ["This response is funny but wrong."],
     }]
 
-    tokenizer = AutoTokenizer.from_pretrained("models/Mistral-7B-Instruct-v0.3")
+    tokenizer = AutoTokenizer.from_pretrained("models/Qwen2.5-7B-Instruct")
     tokenizer.pad_token_id = tokenizer.eos_token_id
-    ret = feedback_collate_fn(tokenizer, 60, "csft", COT_PROMPT, sample_data)
+    ret = feedback_collate_fn(tokenizer, 120, "csft", COT_PROMPT, sample_data)
 
     print("CHOSEN TEXT")
     print(tokenizer.decode(ret["chosen_input_ids"][0]))

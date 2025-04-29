@@ -3,7 +3,7 @@
 ################################################################################
 
 variables:
-  run_name: Llama-3-8B-Instruct-Critic-HHRLHF
+  run_name: Qwen2.5-7B-Instruct-Critic-HHRLHF
   dataset_path: data/hhrlhf-skywork-oracle.json
   micro_batch_size: 2
   global_seed: 17
@@ -16,7 +16,7 @@ run_name: ${variables.run_name}
 ################################################################################
 model:
   feedback_method: csft
-  base_model_name_or_path: models/Llama-3-8B-Instruct
+  base_model_name_or_path: models/Qwen2.5-7B-Instruct
 
 
 ################################################################################

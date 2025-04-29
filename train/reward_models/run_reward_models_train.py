@@ -35,7 +35,6 @@ class ScriptArguments:
 
     # Evaluation
     per_device_eval_batch_size: Optional[int] = field(default=1)
-    eval_strategy: Optional[str] = field(default="steps")
     eval_steps: Optional[int] = field(default=100)
     # Model and loss
     base_model: Optional[str] = field(default="google/gemma-2b-it")
@@ -67,7 +66,6 @@ training_args = TrainingArguments(
     per_device_train_batch_size=script_args.per_device_train_batch_size,
     per_device_eval_batch_size=script_args.per_device_eval_batch_size,
     num_train_epochs=script_args.num_train_epochs,
-    eval_strategy=script_args.eval_strategy,
     eval_steps=script_args.eval_steps,
     save_strategy=script_args.save_strategy,
     save_steps=script_args.save_steps,

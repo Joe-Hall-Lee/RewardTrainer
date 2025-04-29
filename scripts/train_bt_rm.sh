@@ -2,12 +2,12 @@
 
 export NCCL_P2P_DISABLE=1
 export WANDB_MODE=offline
-export CUDA_VISIBLE_DEVICES=2,3,4,5
+export CUDA_VISIBLE_DEVICES=0,2,4,6
 
-dataset_name='data/hhrlhf-skywork-dpo.json'
-base_model='models/Llama-3-8B-Instruct'
+dataset_name='data/helpsteer2-skywork-synrm-dpo.json'
+base_model='models/Qwen2.5-7B-Instruct'
 log_dir='output'
-main_process_port=12541
+main_process_port=12540
 
 n_gpu=4
 learning_rate=2e-6

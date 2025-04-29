@@ -14,14 +14,19 @@ from train.cloud.train.train import COT_PROMPT
 from train.cloud.train.data import build_chat_messages
 
 def build_feedback_prompts(tokenizer, example):
-    bos_text = tokenizer.decode([tokenizer.bos_token_id])
+    if "qwen" in tokenizer.name_or_path.lower():
+        bos_text = "<|im_start|>"
+    else:
+        bos_text = tokenizer.decode([tokenizer.bos_token_id])
     eos_text = tokenizer.decode([tokenizer.eos_token_id])
     
-    # 根据模型是否为 llama3 设置 eot_text
+    # 根据模型设置 eot_text
     if "llama-3" in tokenizer.name_or_path.lower():
         eot_text = "<|eot_id|>"
-    else:
-        eot_text = eos_text
+    elif "mistral" in tokenizer.name_or_path.lower():
+        eot_text = "[/INST]"
+    elif "qwen" in tokenizer.name_or_path.lower():
+        eot_text = "</s>"
 
     chosen_prefix = tokenizer.apply_chat_template(build_chat_messages(example["prompt"], example["chosen"]), tokenize=False)
     rejected_prefix = tokenizer.apply_chat_template(build_chat_messages(example["prompt"], example["rejected"]), tokenize=False)
@@ -43,8 +48,10 @@ def main(args):
     # 根据模型是否为 llama3 设置 eot_text
     if "llama-3" in tokenizer.name_or_path.lower():
         eot_text = "<|eot_id|>"
-    else:
+    elif "mistral" in tokenizer.name_or_path.lower():
         eot_text = "[/INST]"
+    elif "qwen" in tokenizer.name_or_path.lower():
+        eot_text = "<|im_end|>"
 
     # Configure sampling parameters
     sampling_params = SamplingParams(
