@@ -60,7 +60,7 @@ class SimpleRewardTrainer(RewardTrainer):
         self.weight_ratio = kwargs.pop('weight_ratio', 0.1)
         super(SimpleRewardTrainer, self).__init__(**kwargs)
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         rewards = model(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])["logits"]
         bsz = rewards.size(0)
         jidx = torch.arange(0, bsz, 2)

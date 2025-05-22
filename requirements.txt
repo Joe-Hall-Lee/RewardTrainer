@@ -61,6 +61,7 @@ email_validator==2.2.0
 entrypoints==0.4
 fastapi==0.115.12
 fastapi-cli==0.0.7
+fastchat==0.1.0
 fastrlock==0.8.3
 filelock==3.18.0
 Flask==3.1.0

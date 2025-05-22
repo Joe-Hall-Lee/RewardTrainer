@@ -15,7 +15,7 @@ class CLoudRewardModelConfig(PretrainedConfig):
         **kwargs: Additional keyword arguments to be passed to the parent class constructor.
     """
 
-    def __init__(self, feedback_method="vanilla", base_model_name_or_path="meta-llama/Meta-Llama-3-8B", **kwargs):
+    def __init__(self, feedback_method="vanilla", base_model_name_or_path="models/Meta-Llama-3-8B", **kwargs):
         
         assert feedback_method in ["vanilla", "teacher"]
 
@@ -87,11 +87,12 @@ class CLoudRewardModel(PreTrainedModel):
             )
 
             if self.feedback_method == "teacher":
-                # 根据模型是否为 llama3 设置 eot_text
                 if "llama-3" in tokenizer.name_or_path.lower():
                     eot_text = "<|eot_id|>"
-                else:
-                    eot_text = tokenizer.decode([tokenizer.eos_token_id])
+                elif "mistral" in tokenizer.name_or_path.lower():
+                    eot_text = "[/INST]"
+                elif "qwen" in tokenizer.name_or_path.lower():
+                    eot_text = "</s>"
 
                 critique_prefix = tokenizer.apply_chat_template(
                     [{"role": "user", "content": critique_prompt}],
@@ -103,7 +104,7 @@ class CLoudRewardModel(PreTrainedModel):
                     bos_text = tokenizer.decode([tokenizer.bos_token_id])
                     critique_prefix = critique_prefix.replace(bos_text, "")
                 critique_prefix = critique_prefix.replace(tokenizer.decode([tokenizer.eos_token_id]), "")
-                critique_prefix = critique_prefix.replace(eot_text, "")  # 动态替换 eot_text
+                critique_prefix = critique_prefix.replace(eot_text, "") 
 
                 input_prefix += critique_prefix
             
@@ -200,7 +201,7 @@ class CLoudRewardModel(PreTrainedModel):
 if __name__ == "__main__":
     from transformers import AutoTokenizer
 
-    model_name = "output/Qwen2.5-7B-Instruct-CLoud-HelpSteer2"
+    model_name = "output/Qwen2.5-7B-Instruct_test_len1024_fulltrain_8e-05_datahelpsteer2-skywork-synrm-dpo.json"
     model = CLoudRewardModel.from_pretrained(model_name, device_map="cuda", torch_dtype=torch.float16)
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left")
 

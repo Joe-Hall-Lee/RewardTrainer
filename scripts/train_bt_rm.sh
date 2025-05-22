@@ -2,19 +2,18 @@
 
 export NCCL_P2P_DISABLE=1
 export WANDB_MODE=offline
-export CUDA_VISIBLE_DEVICES=0,2,4,6
-
+export CUDA_VISIBLE_DEVICES=2,3,4,6
 dataset_name='data/helpsteer2-skywork-synrm-dpo.json'
-base_model='models/Qwen2.5-7B-Instruct'
+base_model='models/Llama-3-8B-Instruct'
 log_dir='output'
 main_process_port=12540
 
 n_gpu=4
-learning_rate=2e-6
+learning_rate=1e-6
 max_length=1024
 num_train_epochs=1
-per_device_train_batch_size=2
-gradient_accumulation_steps=64
+per_device_train_batch_size=4
+gradient_accumulation_steps=2
 
 accelerate launch --num_processes ${n_gpu} \
     --main_process_port ${main_process_port} \
