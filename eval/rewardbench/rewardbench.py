@@ -119,85 +119,6 @@ def save_jsonl(save_filename: str, table: Dict[str, List[Union[int, float, str]]
             outfile.write("\n")
 
 
-def push_results_to_hub(args, results, accuracy=None):
-    """
-    Push dataset to Hugging Face Hub.
-
-    Args:
-        args: Argument object with the following attributes:
-            - hf_entity: Hugging Face entity (e.g., username or organization).
-            - hf_name: ID of the repository to create or use.
-    """
-    api = HfApi()
-
-    if args.hf_entity is None:
-        args.hf_entity = api.whoami()["name"]
-
-    timestamp = time.strftime("%H%M%d%m%y")
-    # Generate default hf_name if not set
-    if not args.hf_name:
-        args.hf_name = f"rewardbench_eval_{timestamp}"
-
-    full_repo_id = f"{args.hf_entity}/{args.hf_name}"
-
-    # Create repository on Hugging Face Hub
-    api.create_repo(full_repo_id, repo_type="dataset", exist_ok=True)
-
-    # Print and prepare the repository URL
-    repo_full_url = f"https://huggingface.co/datasets/{full_repo_id}"
-
-    # Generate the command that was run
-    run_command = " ".join(["python"] + sys.argv)
-
-    # Get package versions as a dictionary
-    package_versions = {
-        package.key: package.version for package in pkg_resources.working_set}
-
-    # If accuracy is provided, create a string adding it to the results
-    if accuracy is not None:
-        accuracy_str = f"Accuracy: {accuracy}"
-    else:
-        accuracy_str = ""
-
-    # Create and push a repo card
-    rm_card = RepoCard(
-        content=f"""\
-# {args.hf_name}: RewardBench CLI Eval. Outputs
-
-See https://github.com/allenai/reward-bench for more details
-
-Built with the `rewardbench` CLI tool.
-{accuracy_str}
-
-Command used to run:
-```
-{run_command}
-```
-
-## Configs
-```
-args: {pformat(vars(args))}
-```
-
-## Package Versions
-```
-{pformat(package_versions)}
-```
-"""
-    )
-    rm_card.push_to_hub(
-        full_repo_id,
-        repo_type="dataset",
-    )
-    print(f"Pushed to {repo_full_url}")
-
-    # Upload the dataset (after to add metadata to card)
-    data_to_upload = Dataset.from_dict(results)
-    data_to_upload.push_to_hub(full_repo_id)
-
-    return full_repo_id
-
-
 def main():
     parser = HfArgumentParser((Args))
     rewardbench(*parser.parse_args_into_dataclasses())
@@ -214,7 +135,6 @@ def rewardbench(args: Args):
     # Setup logging
     ###############
     accelerator = Accelerator()
-    current_device = accelerator.process_index
 
     logger = get_logger(__name__)
     logging.basicConfig(
@@ -234,7 +154,6 @@ def rewardbench(args: Args):
         logger.info("Loading model with Trust Remote Code")
 
     # basic checks from config
-    is_dpo = False
     MODEL_CONFIGS = REWARD_MODEL_CONFIG
 
     if args.chat_template:
@@ -268,7 +187,6 @@ def rewardbench(args: Args):
         or ("LLaMA3" in args.model)
         or args.not_quantized
     ):
-        quantized = False
         logger.info(
             f"Disabling quantization for llama-3 or override flag (--not_quantized: {args.not_quantized})")
     custom_dialogue = config["custom_dialogue"]

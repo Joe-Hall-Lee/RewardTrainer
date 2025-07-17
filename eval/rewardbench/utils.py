@@ -31,11 +31,6 @@ from .models import REWARD_MODEL_CONFIG
 CORE_EVAL_SET = "data/rewardbench/filtered.json"
 EXTRA_PREF_SETS = "allenai/pref-test-sets"
 BON_CANDIDATES = "ai2-adapt-dev/HERM_BoN_candidates"  # private until officially supported
-EVAL_REPO = "allenai/reward-bench-results"  # data repo to upload results
-
-# get token from HF_TOKEN env variable, but if it doesn't exist pass none
-HF_TOKEN = os.getenv("HF_TOKEN", None)
-api = HfApi(token=HF_TOKEN)
 
 
 def torch_dtype_mapping(dtype_str):
@@ -129,18 +124,6 @@ def save_to_hub(
             for record in results_dict:
                 dumped = json.dumps(record, indent=4, sort_keys=True) + "\n"
                 f.write(dumped)
-
-    if not local_only:
-        scores_url = api.upload_file(
-            path_or_fileobj=scores_path,
-            path_in_repo=target_path + f"{model_name}.json",
-            repo_id=EVAL_REPO if not debug else "ai2-adapt-dev/herm-debug",  # push to correct results repo
-            repo_type="dataset",
-            commit_message=f"Add chosen-rejected text with scores for  model {model_name}",
-        )
-        return scores_url
-    else:
-        return None
 
 
 def map_conversations_testsets(example):
